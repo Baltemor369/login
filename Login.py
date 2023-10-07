@@ -4,6 +4,8 @@ from datetime import datetime
 import sqlite3 as sql
 import bcrypt as crypt
 
+from const import *
+
 def set_geometry(self:tk.Tk|tk.Toplevel, margin_EW:int=100, margin_NS:int=20, center:bool=True):
     self.update_idletasks()
     width = self.winfo_reqwidth() + margin_EW  # margin E-W
@@ -30,7 +32,7 @@ class Login(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.on_exit)
 
         # init user database
-        database = sql.connect("user_database.db")
+        database = sql.connect(DB_USER)
         cursor = database.cursor()
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS users (
@@ -44,7 +46,7 @@ class Login(tk.Tk):
         database.close()
 
         # init log database
-        database = sql.connect("log_database.db")
+        database = sql.connect(DB_LOG)
         cursor = database.cursor()
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS logs (
@@ -60,8 +62,8 @@ class Login(tk.Tk):
         # add default admin
         name = "admin"
         pw = crypt.hashpw("admin".encode("utf-8"), self.salt)
-        if len(self.request("SELECT * FROM users WHERE username=?", (name, )))==0:
-            self.request("INSERT INTO users (username, password, status) VALUES (?, ?, ?)",(name, pw, 1))
+        if len(self.request_user("SELECT * FROM users WHERE username=?", (name, )))==0:
+            self.request_user("INSERT INTO users (username, password, status) VALUES (?, ?, ?)",(name, pw, 1))
 
         self.cookie = {
             "user":"",
@@ -212,7 +214,7 @@ class Login(tk.Tk):
         # TODO check entry char
         
         # Retrieve the hashed password from the database
-        result = self.request("SELECT username,password,status FROM users WHERE username=?", (user,))
+        result = self.request_user("SELECT username,password,status FROM users WHERE username=?", (user,))
 
         if len(result)>1:
             print(result)
@@ -254,16 +256,16 @@ class Login(tk.Tk):
         # Hash the plaintext password using bcrypt
         hashed_password = crypt.hashpw(password.encode('utf-8'), self.salt)
 
-        self.request("INSERT INTO users (username, password, status) VALUES (?, ?, ?)",(name, hashed_password, status))
+        self.request_user("INSERT INTO users (username, password, status) VALUES (?, ?, ?)",(name, hashed_password, status))
 
     def del_user(self):
         username = self.E_username.get()
 
         # TODO check values
 
-        result = self.request("SELECT id FROM users WHERE username=?", (username,))
+        result = self.request_user("SELECT id FROM users WHERE username=?", (username,))
         if len(result)==1:
-            self.request("DELETE FROM users WHERE id=?", (result[0]))
+            self.request_user("DELETE FROM users WHERE id=?", (result[0]))
             messagebox.showinfo("User delete", f"User {username} has been deleted.")
 
             # Get the current date and time
@@ -288,8 +290,21 @@ class Login(tk.Tk):
         self.cookie['user'] = ""
         self.cookie['status'] = -1
     
-    def request(self, cmd:str, values:tuple|list):
-        database = sql.connect("user_database.db")
+    def request_user(self, cmd:str, values:tuple|list):
+        database = sql.connect(DB_USER)
+        cursor = database.cursor()
+        
+        cursor.execute(cmd, tuple(values))
+        
+        result = cursor.fetchall()
+        
+        database.commit()
+        database.close()
+        
+        return result
+    
+    def request_log(self, cmd:str, values:tuple|list):
+        database = sql.connect(DB_LOG)
         cursor = database.cursor()
         
         cursor.execute(cmd, tuple(values))
@@ -310,7 +325,7 @@ class Login(tk.Tk):
             self.del_user()
     
     def add_log(self, text:str):
-        database = sql.connect("log_database.db")
+        database = sql.connect(DB_LOG)
         cursor = database.cursor()
         
         cursor.execute("INSERT INTO logs (log) VALUES (?)", (text,))
@@ -319,7 +334,7 @@ class Login(tk.Tk):
         database.close()
     
     def get_logs(self):
-        database = sql.connect("log_database.db")
+        database = sql.connect(DB_LOG)
         cursor = database.cursor()
         
         result = cursor.execute("SELECT log FROM logs ORDER BY id DESC LIMIT 10")
