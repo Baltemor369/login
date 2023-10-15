@@ -1,7 +1,5 @@
-from Login import Login
-
-# add CSS to buttons labels and window 
+from Ui import Ui
 
 if __name__ == "__main__":
-    login = Login()
-    login.run()
+    app = Ui()
+    app.run()
